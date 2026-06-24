@@ -2,80 +2,99 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0f172a">
   <title>ZZZ Shop Secure Payment</title>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
       min-height: 100vh;
+      padding: 24px;
       display: grid;
       place-items: center;
-      padding: 24px;
       font-family: system-ui, -apple-system, sans-serif;
       background: #0f172a;
-      color: #fff;
+      color: #ffffff;
     }
 
     .card {
-      width: min(90vw, 420px);
-      padding: 30px;
+      width: min(92vw, 420px);
+      padding: 30px 24px;
       border-radius: 22px;
       background: #111827;
       text-align: center;
-      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
     }
 
     .logo {
-      width: 72px;
-      height: 72px;
+      width: 78px;
+      height: 78px;
       margin: 0 auto 18px;
-      border-radius: 50%;
       display: grid;
       place-items: center;
-      background: #1e293b;
-      font-size: 34px;
-    }
-
-    .spinner {
-      width: 42px;
-      height: 42px;
-      margin: 22px auto;
-      border: 4px solid rgba(255,255,255,.18);
-      border-top-color: #38bdf8;
       border-radius: 50%;
-      animation: spin .8s linear infinite;
+      background: #1e293b;
+      font-size: 38px;
     }
 
-    .hidden {
-      display: none;
+    h1 {
+      margin: 0 0 10px;
+      font-size: 28px;
+    }
+
+    p {
+      margin: 0;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+
+    .amount {
+      margin: 22px 0;
+      padding: 16px;
+      border-radius: 14px;
+      background: #1e293b;
+      font-size: 18px;
+      font-weight: 700;
     }
 
     button {
       width: 100%;
-      margin-top: 18px;
-      padding: 14px 18px;
+      padding: 15px 18px;
       border: 0;
-      border-radius: 12px;
-      font-size: 16px;
+      border-radius: 13px;
+      font-size: 17px;
       font-weight: 700;
-      background: #2563eb;
-      color: #fff;
       cursor: pointer;
     }
 
-    .muted {
-      color: #cbd5e1;
-      line-height: 1.55;
+    #payButton {
+      background: #f3ba2f;
+      color: #111827;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    #closeButton {
+      margin-top: 12px;
+      background: #334155;
+      color: #ffffff;
+    }
+
+    .error {
+      display: none;
+      margin-top: 18px;
+      color: #fca5a5;
+    }
+
+    .success {
+      display: none;
+      margin-top: 18px;
+      color: #86efac;
     }
   </style>
 </head>
@@ -84,38 +103,41 @@
   <main class="card">
     <div class="logo">💳</div>
 
-    <h2>ZZZ Shop</h2>
+    <h1>ZZZ Shop</h1>
 
-    <div id="loading">
-      <p class="muted">Secure payment page খুলছে…</p>
-      <div class="spinner"></div>
+    <p>
+      Secure Binance payment চালু করতে নিচের button চাপুন।
+    </p>
+
+    <div class="amount" id="paymentInfo">
+      Payment প্রস্তুত
     </div>
 
-    <div id="returnBox" class="hidden">
-      <p class="muted">
-        Payment page বন্ধ হয়েছে।<br>
-        Telegram bot-এ ফিরে payment status দেখুন।
-      </p>
+    <button id="payButton" type="button">
+      Continue to Binance Payment
+    </button>
 
-      <button onclick="returnToBot()">
-        Return to Bot
-      </button>
+    <button id="closeButton" type="button">
+      Return to Telegram
+    </button>
+
+    <div id="success" class="success">
+      Payment page browser-এ খোলা হয়েছে।<br>
+      Payment complete করে Telegram-এ ফিরে আসুন।
     </div>
 
-    <div id="errorBox" class="hidden">
-      <p class="muted">
-        Payment session পাওয়া যায়নি।<br>
-        Bot থেকে নতুন payment তৈরি করুন।
-      </p>
-
-      <button onclick="returnToBot()">
-        Return to Bot
-      </button>
+    <div id="error" class="error">
+      Payment link পাওয়া যায়নি। Bot থেকে নতুন payment তৈরি করুন।
     </div>
   </main>
 
   <script>
-    const BOT_URL = "https://t.me/YOUR_BOT_USERNAME";
+    const tg = window.Telegram?.WebApp;
+
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
 
     function decodeBase64Url(value) {
       value = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -124,70 +146,78 @@
         value += "=";
       }
 
-      return decodeURIComponent(
-        Array.from(atob(value))
-          .map(char =>
-            "%" + char.charCodeAt(0)
-              .toString(16)
-              .padStart(2, "0")
-          )
-          .join("")
+      const binary = atob(value);
+
+      const bytes = Uint8Array.from(
+        binary,
+        char => char.charCodeAt(0)
       );
+
+      return new TextDecoder().decode(bytes);
     }
 
-    function showBox(id) {
-      document.getElementById("loading").classList.add("hidden");
-      document.getElementById(id).classList.remove("hidden");
-    }
-
-    function returnToBot() {
-      try {
-        if (window.Telegram?.WebApp) {
-          Telegram.WebApp.close();
-          return;
-        }
-      } catch (_) {}
-
-      location.href = BOT_URL;
-    }
-
-    try {
-      if (window.Telegram?.WebApp) {
-        Telegram.WebApp.ready();
-        Telegram.WebApp.expand();
-      }
-
-      const params = new URLSearchParams(location.search);
-      const token = params.get("u");
+    function getPaymentUrl() {
+      const token = new URLSearchParams(
+        window.location.search
+      ).get("u");
 
       if (!token) {
-        showBox("returnBox");
-      } else {
-        const target = decodeBase64Url(token);
-        const url = new URL(target);
-
-        const valid =
-          url.protocol === "https:" &&
-          url.hostname === "zzzshop.paymently.io" &&
-          url.pathname.startsWith("/checkout/");
-
-        if (!valid) {
-          throw new Error("Invalid payment target");
-        }
-
-        sessionStorage.setItem(
-          "zzz_last_payment_url",
-          url.href
-        );
-
-        setTimeout(() => {
-          location.replace(url.href);
-        }, 300);
+        return null;
       }
-    } catch (error) {
-      console.error(error);
-      showBox("errorBox");
+
+      const decoded = decodeBase64Url(token);
+      const url = new URL(decoded);
+
+      const valid =
+        url.protocol === "https:" &&
+        url.hostname === "zzzshop.paymently.io" &&
+        url.pathname.startsWith("/checkout/");
+
+      if (!valid) {
+        return null;
+      }
+
+      return url.href;
     }
+
+    const paymentUrl = getPaymentUrl();
+    const payButton = document.getElementById("payButton");
+    const closeButton = document.getElementById("closeButton");
+    const errorBox = document.getElementById("error");
+    const successBox = document.getElementById("success");
+
+    if (!paymentUrl) {
+      payButton.disabled = true;
+      payButton.style.opacity = ".5";
+      errorBox.style.display = "block";
+    }
+
+    payButton.addEventListener("click", function () {
+      if (!paymentUrl) {
+        errorBox.style.display = "block";
+        return;
+      }
+
+      if (tg && typeof tg.openLink === "function") {
+        tg.openLink(paymentUrl);
+      } else {
+        window.open(
+          paymentUrl,
+          "_blank",
+          "noopener,noreferrer"
+        );
+      }
+
+      successBox.style.display = "block";
+    });
+
+    closeButton.addEventListener("click", function () {
+      if (tg && typeof tg.close === "function") {
+        tg.close();
+      } else {
+        history.back();
+      }
+    });
   </script>
 </body>
 </html>
