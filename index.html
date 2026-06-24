@@ -2,31 +2,38 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ZZZ Shop Secure Payment</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0f172a">
+  <title>ZZZ Shop Secure Payment</title>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
   <style>
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       min-height: 100vh;
       display: grid;
       place-items: center;
+      padding: 24px;
       font-family: system-ui, -apple-system, sans-serif;
       background: #0f172a;
       color: #fff;
     }
+
     .card {
-      width: min(88vw, 420px);
+      width: min(90vw, 420px);
       padding: 30px;
       border-radius: 22px;
       background: #111827;
       text-align: center;
       box-shadow: 0 20px 60px rgba(0,0,0,.35);
     }
+
     .logo {
-      width: 74px;
-      height: 74px;
+      width: 72px;
+      height: 72px;
       margin: 0 auto 18px;
       border-radius: 50%;
       display: grid;
@@ -34,64 +41,152 @@
       background: #1e293b;
       font-size: 34px;
     }
+
     .spinner {
-      width: 40px;
-      height: 40px;
-      margin: 18px auto;
-      border: 4px solid rgba(255,255,255,.2);
+      width: 42px;
+      height: 42px;
+      margin: 22px auto;
+      border: 4px solid rgba(255,255,255,.18);
       border-top-color: #38bdf8;
       border-radius: 50%;
       animation: spin .8s linear infinite;
     }
-    .error {
+
+    .hidden {
       display: none;
-      color: #fecaca;
-      margin-top: 16px;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+
+    button {
+      width: 100%;
+      margin-top: 18px;
+      padding: 14px 18px;
+      border: 0;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      background: #2563eb;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .muted {
+      color: #cbd5e1;
+      line-height: 1.55;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
+
 <body>
   <main class="card">
     <div class="logo">💳</div>
+
     <h2>ZZZ Shop</h2>
-    <p>Secure payment page খুলছে…</p>
-    <div class="spinner"></div>
-    <p id="error" class="error">Payment link invalid.</p>
+
+    <div id="loading">
+      <p class="muted">Secure payment page খুলছে…</p>
+      <div class="spinner"></div>
+    </div>
+
+    <div id="returnBox" class="hidden">
+      <p class="muted">
+        Payment page বন্ধ হয়েছে।<br>
+        Telegram bot-এ ফিরে payment status দেখুন।
+      </p>
+
+      <button onclick="returnToBot()">
+        Return to Bot
+      </button>
+    </div>
+
+    <div id="errorBox" class="hidden">
+      <p class="muted">
+        Payment session পাওয়া যায়নি।<br>
+        Bot থেকে নতুন payment তৈরি করুন।
+      </p>
+
+      <button onclick="returnToBot()">
+        Return to Bot
+      </button>
+    </div>
   </main>
 
   <script>
+    const BOT_URL = "https://t.me/YOUR_BOT_USERNAME";
+
     function decodeBase64Url(value) {
       value = value.replace(/-/g, "+").replace(/_/g, "/");
-      while (value.length % 4) value += "=";
+
+      while (value.length % 4) {
+        value += "=";
+      }
+
       return decodeURIComponent(
-        Array.prototype.map.call(
-          atob(value),
-          c => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
-        ).join("")
+        Array.from(atob(value))
+          .map(char =>
+            "%" + char.charCodeAt(0)
+              .toString(16)
+              .padStart(2, "0")
+          )
+          .join("")
       );
     }
 
+    function showBox(id) {
+      document.getElementById("loading").classList.add("hidden");
+      document.getElementById(id).classList.remove("hidden");
+    }
+
+    function returnToBot() {
+      try {
+        if (window.Telegram?.WebApp) {
+          Telegram.WebApp.close();
+          return;
+        }
+      } catch (_) {}
+
+      location.href = BOT_URL;
+    }
+
     try {
-      const token = new URLSearchParams(location.search).get("u");
-      if (!token) throw new Error("Missing token");
+      if (window.Telegram?.WebApp) {
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+      }
 
-      const target = decodeBase64Url(token);
-      const url = new URL(target);
+      const params = new URLSearchParams(location.search);
+      const token = params.get("u");
 
-      const valid =
-        url.protocol === "https:" &&
-        url.hostname === "zzzshop.paymently.io" &&
-        url.pathname.startsWith("/checkout/");
+      if (!token) {
+        showBox("returnBox");
+      } else {
+        const target = decodeBase64Url(token);
+        const url = new URL(target);
 
-      if (!valid) throw new Error("Invalid target");
+        const valid =
+          url.protocol === "https:" &&
+          url.hostname === "zzzshop.paymently.io" &&
+          url.pathname.startsWith("/checkout/");
 
-      setTimeout(() => {
-        location.replace(url.href);
-      }, 250);
+        if (!valid) {
+          throw new Error("Invalid payment target");
+        }
+
+        sessionStorage.setItem(
+          "zzz_last_payment_url",
+          url.href
+        );
+
+        setTimeout(() => {
+          location.replace(url.href);
+        }, 300);
+      }
     } catch (error) {
-      document.querySelector(".spinner").style.display = "none";
-      document.getElementById("error").style.display = "block";
+      console.error(error);
+      showBox("errorBox");
     }
   </script>
 </body>
